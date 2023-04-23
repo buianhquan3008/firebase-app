@@ -56,6 +56,18 @@ export const signOutUser = async () => await signOut(auth);
 
 export const db = getFirestore();
 
+export const addCollectionAndDocuments = async (collectionKey, objectToAdd) => {
+  // Get a new write batch
+  const batch = writeBatch(db);
+  const collectionRef = collection(db, collectionKey);
+  for (let object of objectToAdd) {
+    const docRef = doc(collectionRef, object.title.toLowerCase());
+    batch.set(docRef, object);
+  }
+  await batch.commit();
+  console.log('done');
+} 
+
 export const createUserDocumentFromAuth = async (
   userAuth,
   additionalInformation = {}
@@ -86,3 +98,16 @@ export const createUserDocumentFromAuth = async (
 
 export const onAuthStateChangedListener = (callback) =>
   onAuthStateChanged(auth, callback);
+
+export const getCurrentUser = () => {
+  return new Promise((resolve, reject) => {
+    const unsubscribe = onAuthStateChanged(
+      auth, 
+      userAuth => {
+        unsubscribe();
+        resolve(userAuth);
+      },
+      reject
+    );
+  })
+}
