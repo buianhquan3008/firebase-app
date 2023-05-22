@@ -40,7 +40,7 @@ workflows:
     jobs:
       - build
       - aws-ecr/build-and-push-image:
-          registry-id: $AWS_ECR_REGISTRY_ID
+          registry-id: AWS_ECR_REGISTRY_ID
           executor: aws-ecr/default
           repo: firebase-app
           tag: latest
