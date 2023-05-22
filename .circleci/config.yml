@@ -1,21 +1,77 @@
-# This config is equivalent to both the '.circleci/extended/orb-free.yml' and the base '.circleci/config.yml'
+# Use the latest 2.1 version of CircleCI pipeline process engine.
+# See: https://circleci.com/docs/2.0/configuration-reference
 version: 2.1
-
-# Orbs are reusable packages of CircleCI configuration that you may share across projects, enabling you to create encapsulated, parameterized commands, jobs, and executors that can be used across multiple projects.
-# See: https://circleci.com/docs/2.0/orb-intro/
 orbs:
-  node: circleci/node@4.7
+  aws-ecr: circleci/aws-ecr@8.0.0
+  aws-cli: circleci/aws-cli@3.0.0
+  aws-ecs: circleci/aws-ecs@3.1.0
+executors:
+  node-executor:
+    docker:
+      - image: node:18.4.0
+    working_directory: ~/app
 
-# Invoke jobs via workflows
-# See: https://circleci.com/docs/2.0/configuration-reference/#workflows
+commands:
+  pre-env:
+    description: 'Prepare the environments'
+    steps:
+      - checkout
+      - restore_cache:
+          key: v1-deps-{{ checksum "package-lock.json" }}
+      - run: npm install
+      - save_cache:
+          key: v1-deps-{{ checksum "package-lock.json" }}
+          paths:
+            - node_modules
+
+jobs:
+  # lint:
+  #   executor: node-executor
+  #   steps:
+  #     - pre-env
+  #     - run: npm run lint
+  build:
+    executor: node-executor
+    steps:
+      - pre-env
+      # - run: npm run pre-push
 workflows:
-  sample: # This is the name of the workflow, feel free to change it to better match your workflow.
-    # Inside the workflow, you define the jobs you want to run.
+  build-and-linter:
     jobs:
-      - node/test:
-          # This is the node version to use for the `cimg/node` tag
-          # Relevant tags can be found on the CircleCI Developer Hub
-          # https://circleci.com/developer/images/image/cimg/node
-          version: '16.10'
-          # If you are using yarn, change the line below from "npm" to "yarn"
-          pkg-manager: npm
+      - build
+      - aws-ecr/build-and-push-image:
+          registry-id: 214923845018.dkr.ecr.ap-southeast-2.amazonaws.com/firebase-app
+          executor: aws-ecr/default
+          repo: firebase-app
+          tag: latest
+          requires:
+            - build
+          filters:
+            branches:
+              only:
+                - structure
+
+      # - aws-ecs/run-task:
+      #     cluster: $FIREBASE_CLUSTER_NAME
+      #     security-group-ids: $STAGING_RUN_TASK_SG
+      #     subnet-ids: $STAGING_RUN_TASK_SUBNET_ID
+      #     task-definition: $STAGING_FAMILY
+      #     assign-public-ip: ENABLED
+      #     requires:
+      #       - aws-ecr/build-and-push-image
+      #     filters:
+      #       branches:
+      #         only:
+      #           - structure
+
+      # - aws-ecs/deploy-service-update:
+      #     cluster: $FIREBASE_CLUSTER_NAME
+      #     service-name: $FIREBASE_SERVICE_NAME
+      #     # family: $STAGING_FAMILY
+      #     force-new-deployment: true
+      #     requires:
+      #       - aws-ecr/build-and-push-image
+      #     filters:
+      #       branches:
+      #         only:
+      #           - structure
